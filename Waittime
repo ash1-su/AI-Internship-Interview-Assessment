@@ -1,0 +1,55 @@
+from langchain.prompts import PromptTemplate
+from langchain.chat_models import ChatOpenAI
+from langchain.chains import LLMChain
+
+prompt = PromptTemplate(
+    input_variables=["queue_data"],
+    template="""
+    You are a smart queue optimizer in a hospital.
+    Given the following queue data:
+    
+    {queue_data}
+
+    Recommend an optimized queue order that minimizes overall wait time,
+    prioritizes children under 5 years, and considers urgency levels and doctor specialties.
+    
+    Return a JSON list of patient IDs in the new order.
+    """
+)
+
+llm = ChatOpenAI(temperature=0)
+queue_optimizer_chain = LLMChain(llm=llm, prompt=prompt)
+queue_data = {
+    "patients": [
+        {"id": "P1", "age": 2, "urgency": "high", "type": "pediatric", "arrival_time": "10:00"},
+        {"id": "P2", "age": 30, "urgency": "low", "type": "general", "arrival_time": "10:05"},
+        {"id": "P3", "age": 7, "urgency": "medium", "type": "pediatric", "arrival_time": "10:02"},
+        {"id": "P4", "age": 45, "urgency": "high", "type": "general", "arrival_time": "10:03"},
+    ],
+    "doctors": [
+        {"id": "D1", "type": "pediatric"},
+        {"id": "D2", "type": "general"}
+    ]
+}
+import json
+
+response = queue_optimizer_chain.run(queue_data=json.dumps(queue_data))
+optimized_order = json.loads(response)
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import List
+
+app = FastAPI()
+
+class Patient(BaseModel):
+    id: str
+    age: int
+    urgency: str
+    type: str
+    arrival_time: str
+
+@app.post("/optimize_queue/")
+async def optimize_queue(patients: List[Patient]):
+    queue_dict = {"patients": [p.dict() for p in patients], "doctors": doctor_list}
+    response = queue_optimizer_chain.run(queue_data=json.dumps(queue_dict))
+    return {"optimized_order": json.loads(response)}
